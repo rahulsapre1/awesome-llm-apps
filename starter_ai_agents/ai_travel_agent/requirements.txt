@@ -1,4 +1,7 @@
-streamlit 
-agno
-openai
-google-search-results
+streamlit>=1.24.0
+python-dotenv>=0.19.0
+agno>=0.1.0
+folium>=0.12.1
+streamlit-folium>=0.11.0
+requests>=2.26.0
+python-dateutil>=2.8.2
