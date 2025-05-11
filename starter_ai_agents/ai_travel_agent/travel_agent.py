@@ -5,6 +5,7 @@ import streamlit as st
 from agno.models.openai import OpenAIChat
 from dotenv import load_dotenv
 import os
+from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
@@ -63,26 +64,76 @@ if openai_api_key and serp_api_key:
         add_datetime_to_instructions=True,
     )
 
-    # Input fields for the user's destination and the number of days they want to travel for
-    destination = st.text_input("Where do you want to go?")
-    num_days = st.number_input("How many days do you want to travel for?", min_value=1, max_value=30, value=7)
+    # Create two columns for input fields
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Basic travel information
+        destination = st.text_input("Where do you want to go?")
+        num_days = st.number_input("How many days do you want to travel for?", min_value=1, max_value=30, value=7)
+        start_date = st.date_input("When do you want to start?", value=datetime.now() + timedelta(days=1))
+
+    with col2:
+        # Additional preferences
+        budget = st.selectbox("What's your budget range?", 
+                            ["Budget", "Moderate", "Luxury"])
+        travel_style = st.selectbox("What's your travel style?", 
+                                  ["Relaxed", "Balanced", "Adventure"])
+        interests = st.multiselect("What are your interests?", 
+                                 ["Culture", "Food", "Nature", "History", "Shopping", "Nightlife"])
 
     if st.button("Generate Itinerary"):
-        with st.spinner("Researching your destination..."):
-            # First get research results
-            research_results = researcher.run(f"Research {destination} for a {num_days} day trip", stream=False)
+        if not destination:
+            st.error("Please enter a destination")
+            st.stop()
             
-            # Show research progress
-            st.write("✓ Research completed")
-            
-        with st.spinner("Creating your personalized itinerary..."):
-            # Pass research results to planner
-            prompt = f"""
-            Destination: {destination}
-            Duration: {num_days} days
-            Research Results: {research_results.content}
-            
-            Please create a detailed itinerary based on this research.
-            """
-            response = planner.run(prompt, stream=False)
-            st.write(response.content)
+        try:
+            with st.spinner("Researching your destination..."):
+                # First get research results
+                research_prompt = f"""
+                Research {destination} for a {num_days} day trip.
+                Budget: {budget}
+                Travel Style: {travel_style}
+                Interests: {', '.join(interests)}
+                Start Date: {start_date}
+                """
+                research_results = researcher.run(research_prompt, stream=False)
+                
+                # Show research progress
+                st.write("✓ Research completed")
+                
+            with st.spinner("Creating your personalized itinerary..."):
+                # Pass research results to planner
+                prompt = f"""
+                Destination: {destination}
+                Duration: {num_days} days
+                Start Date: {start_date}
+                Budget: {budget}
+                Travel Style: {travel_style}
+                Interests: {', '.join(interests)}
+                Research Results: {research_results.content}
+                
+                Please create a detailed itinerary based on this research. Format the output with:
+                - A brief introduction
+                - Day-by-day breakdown with estimated times
+                - Estimated costs for each activity
+                - Transportation options between locations
+                - Local tips and recommendations
+                """
+                response = planner.run(prompt, stream=False)
+                
+                # Display the itinerary with better formatting
+                st.markdown("## Your Personalized Itinerary")
+                st.markdown(response.content)
+                
+                # Add a download button for the itinerary
+                st.download_button(
+                    label="Download Itinerary",
+                    data=response.content,
+                    file_name=f"{destination}_itinerary.md",
+                    mime="text/markdown"
+                )
+                
+        except Exception as e:
+            st.error(f"An error occurred: {str(e)}")
+            st.stop()
